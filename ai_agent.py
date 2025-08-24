@@ -1,15 +1,46 @@
 import os
+from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain.tools import Tool
 from langchain.prompts import ChatPromptTemplate
-from langchain_core.messages import HumanMessage, SystemMessage
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 def calculator_tool(expression: str) -> str:
     """Simple calculator tool that evaluates mathematical expressions."""
+    import ast
+    import operator
+    
+    # Supported operations
+    ops = {
+        ast.Add: operator.add,
+        ast.Sub: operator.sub,
+        ast.Mult: operator.mul,
+        ast.Div: operator.truediv,
+        ast.Pow: operator.pow,
+        ast.USub: operator.neg,
+        ast.UAdd: operator.pos,
+    }
+    
+    def safe_eval(node):
+        if isinstance(node, ast.Constant):
+            return node.value
+        elif isinstance(node, ast.BinOp):
+            left = safe_eval(node.left)
+            right = safe_eval(node.right)
+            return ops[type(node.op)](left, right)
+        elif isinstance(node, ast.UnaryOp):
+            operand = safe_eval(node.operand)
+            return ops[type(node.op)](operand)
+        else:
+            raise ValueError(f"Unsupported operation: {type(node)}")
+    
     try:
-        result = eval(expression)
+        tree = ast.parse(expression, mode='eval')
+        result = safe_eval(tree.body)
         return str(result)
     except Exception as e:
         return f"Error: {str(e)}"
