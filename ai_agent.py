@@ -1,4 +1,6 @@
 import os
+import requests
+import json
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain.agents import AgentExecutor, create_openai_tools_agent
@@ -51,6 +53,46 @@ def weather_tool(location: str) -> str:
     return f"The weather in {location} is sunny with 75°F temperature."
 
 
+def search_tool(query: str) -> str:
+    """Web search tool using DuckDuckGo API."""
+    try:
+        # Use DuckDuckGo's instant answer API
+        url = "https://api.duckduckgo.com/"
+        params = {
+            'q': query,
+            'format': 'json',
+            'no_html': '1',
+            'skip_disambig': '1'
+        }
+        
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        # Try to get instant answer
+        if data.get('AbstractText'):
+            return f"Search result for '{query}': {data['AbstractText']}"
+        elif data.get('Answer'):
+            return f"Search result for '{query}': {data['Answer']}"
+        elif data.get('Definition'):
+            return f"Search result for '{query}': {data['Definition']}"
+        else:
+            # Fallback to related topics if available
+            topics = data.get('RelatedTopics', [])
+            if topics:
+                first_topic = topics[0]
+                if isinstance(first_topic, dict) and first_topic.get('Text'):
+                    return f"Search result for '{query}': {first_topic['Text']}"
+            
+            return f"No detailed results found for '{query}'. Try rephrasing your search query."
+            
+    except requests.exceptions.RequestException as e:
+        return f"Search error: Unable to perform search due to network issue - {str(e)}"
+    except Exception as e:
+        return f"Search error: {str(e)}"
+
+
 def create_ai_agent():
     """Create an AI agent using LangChain and OpenAI GPT-4."""
     
@@ -72,6 +114,11 @@ def create_ai_agent():
             name="Weather",
             func=weather_tool,
             description="Get weather information for a specific location. Input should be a location name."
+        ),
+        Tool(
+            name="Search",
+            func=search_tool,
+            description="Search the web for information. Input should be a search query or question."
         )
     ]
     
